@@ -7,7 +7,7 @@ import jwt from "jsonwebtoken";
 import { sendEmail } from "../../lib/email";
 // import { loginSchema } from "./auth.schema";
 import { from } from "stream/iter";
-import { generateAccessToken , createRefreshToken } from "../../lib/token";
+import { generateAccessToken , createRefreshToken, verifyRefreshToken } from "../../lib/token";
 
 function getAppUrl(){
     return process.env.APP_URL || 'http://localhost:5001';
@@ -44,13 +44,15 @@ export async function registerHandler(req: Request, res:Response) {
         })
 
         //email verification logic will be added here
-        const verifyToken = jwt.sign({
+        const verifyToken = jwt.sign(
+            {
             sub : newlyCreatedUser._id,
 
-        },
+            },
         process.env.JWT_ACCESS_SECRET! , {
             expiresIn : '1h'
-        });
+            }
+    );
 
         
     
@@ -191,5 +193,70 @@ export async function loginHandler(req: Request , res:Response){
     
 }
 
+export async function refreshHandler(req: Request , res: Response){
+
+    try{
+        const token = req.cookies?.refreshToken as string | undefined;
+        if(!token){
+            return res.status(401).json({
+                message : 'Refresh token is missing'
+            })
+        }
+        const payload = verifyRefreshToken(token);
+        const user = await User.findById(payload.sub);
+        if(!user){
+            return res.status(404).json({
+                message : 'User not found'
+            })
+        }
+
+    if(user.tokenVersion !== payload.tokenVersion){
+        return res.status(401).json({
+            message : 'Invalid refresh token'
+        })  
+    }
+
+    const newAccessToken = generateAccessToken(user.id , user.role , user.tokenVersion);
+    const newRefreshToken = createRefreshToken(user.id , user.tokenVersion);
+
+     const isProduction = process.env.NODE_ENV === 'production';
+        res.cookie('refreshToken' , newRefreshToken , {
+            httpOnly : true, 
+            secure : isProduction,
+            sameSite : 'lax',
+            // path : '/auth/refresh-token',
+            maxAge : 7 * 24 * 60 * 60 * 1000 // 7 days
+        })
+
+        return res.status(200).json({
+            message : 'token refreshed successfully',
+            accessToken : newAccessToken,
+            user : {
+                id : user._id,
+                email : user.email,
+                name : user.name,
+                role : user.role,
+                isEmailVerified : user.isEmailVerified,
+                twoFactorEnabled : user.twoFactorEnabled
+            }
+        })
+
+
+
+
+    }catch(error){
+        console.log(error);
+        return res.status(500).json({
+            message : 'Internal Server Error'
+        })
+    }
+}
+
+export async function logoutHandler(req: Request , res: Response){
+    res.clearCookie('refreshToken' ,{ path : '/'});
+    return res.status(200).json({
+        message : 'Logged out successfully'
+    })
+}
 
 
