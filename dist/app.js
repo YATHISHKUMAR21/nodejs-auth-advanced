@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
-// import authRoutes from './routes/authRoutes';
+const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const app = (0, express_1.default)();
 // const PORT = process.env.PORT || 5000;
 // Middleware
@@ -27,4 +27,5 @@ app.use((0, cookie_parser_1.default)()); //parse cookies to req.cookies
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Server is healthy' });
 });
+app.use('/auth', auth_routes_1.default);
 exports.default = app;

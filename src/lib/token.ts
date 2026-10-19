@@ -15,6 +15,6 @@ export function createRefreshToken(userId : string , tokenVersion : number){
 }
 
 export function verifyRefreshToken(token : string){
-    return jwt.verify(token , process.env.JWT_REFRESH_TOKEN!) as 
+    return jwt.verify(token , process.env.JWT_REFRESH_SECRET!) as 
     { sub : string , tokenVersion : number}
 }

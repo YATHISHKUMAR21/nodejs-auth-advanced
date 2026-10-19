@@ -1,0 +1,20 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.generateAccessToken = generateAccessToken;
+exports.createRefreshToken = createRefreshToken;
+exports.verifyRefreshToken = verifyRefreshToken;
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+function generateAccessToken(userId, role, tokenVersion) {
+    const payload = { sub: userId, role, tokenVersion };
+    return jsonwebtoken_1.default.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: '30m' });
+}
+function createRefreshToken(userId, tokenVersion) {
+    const payload = { sub: userId, tokenVersion };
+    return jsonwebtoken_1.default.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+}
+function verifyRefreshToken(token) {
+    return jsonwebtoken_1.default.verify(token, process.env.JWT_REFRESH_SECRET);
+}

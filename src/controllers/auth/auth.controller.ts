@@ -163,7 +163,7 @@ export async function loginHandler(req: Request , res:Response){
             httpOnly : true,
             secure : isProduction,
             sameSite : 'lax',
-            // path : '/auth/refresh-token',
+            path : '/',
             maxAge : 7 * 24 * 60 * 60 * 1000 // 7 days
         })
 
@@ -224,7 +224,7 @@ export async function refreshHandler(req: Request , res: Response){
             httpOnly : true, 
             secure : isProduction,
             sameSite : 'lax',
-            // path : '/auth/refresh-token',
+            path : '/',
             maxAge : 7 * 24 * 60 * 60 * 1000 // 7 days
         })
 
@@ -253,7 +253,13 @@ export async function refreshHandler(req: Request , res: Response){
 }
 
 export async function logoutHandler(req: Request , res: Response){
-    res.clearCookie('refreshToken' ,{ path : '/'});
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('refreshToken' , {
+        httpOnly : true,
+        secure : isProduction,
+        sameSite : 'lax',
+        path : '/'
+    });
     return res.status(200).json({
         message : 'Logged out successfully'
     })
