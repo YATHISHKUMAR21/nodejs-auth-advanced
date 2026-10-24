@@ -10,9 +10,24 @@ import { from } from "stream/iter";
 import { generateAccessToken , createRefreshToken, verifyRefreshToken } from "../../lib/token";
 import crypto from 'crypto';
 import { send } from "process";
+import {OAuth2Client} from 'google-auth-library';
 
 function getAppUrl(){
     return process.env.APP_URL || 'http://localhost:5001';
+}
+
+function getGoogleClient(){
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+    if(!clientId || !clientSecret){
+        throw new Error('Google Client Id and Secret are Missing');
+    }
+    return new OAuth2Client({
+        clientId,
+        clientSecret,
+        redirectUri
+    })
 }
 
 export async function registerHandler(req: Request, res:Response) {
@@ -376,3 +391,118 @@ export async function resetPasswordHandler(req: Request , res: Response){
 
 //authorisation
 // export async function 
+export async function googleAuthStartHandler(req:Request , res:Response){
+    try {
+        const client= getGoogleClient();
+        const url = client.generateAuthUrl({
+            access_type : 'offline',
+            prompt : 'consent',
+            scope : ['openid', 'email', 'profile']
+        });
+
+        return res.redirect(url);
+
+        
+    } catch (error) {
+        console.log(error);
+          return res.status(500).json({
+            message : "Internal server error"
+        })
+    }
+}
+
+export async function googleAuthCallbackHandler(req: Request , res: Response){
+    const code = req.query.code as string | undefined;
+    if(!code){
+        return res.status(400).json({
+            message : "missing code in callback"
+        })
+    }
+
+    try {
+        const client = getGoogleClient();
+        const {tokens} = await client.getToken(code);
+        console.log("token:", tokens);
+        console.log("code:", code);
+        if(!tokens.id_token){
+            return res.status(400).json({
+                message : 'no id token is present google'
+            })
+        }
+        //verify id token and read the user info from that
+        const ticket = await client.verifyIdToken({
+            idToken : tokens.id_token,
+            audience : process.env.GOOGLE_CLIENT_ID as string
+        })
+        const payload = ticket.getPayload()
+        const email = payload?.email;
+        const emailVerified = payload?.email_verified;
+        if(!email || !emailVerified){
+            return res.status(400).json({
+                message : 'google email account is not verified'
+            })
+        } 
+        const normalizedEmail = email.toLowerCase().trim();
+        let user = await User.findOne({email : normalizedEmail});
+         if(!user){
+
+            const randomPassword = crypto.randomBytes(16).toString('hex');
+            const passwordHash = await hashPassword(randomPassword);
+
+
+            user = await User.create({
+                email : normalizedEmail,
+                passwordHash : passwordHash,
+                role : 'user',
+                isEmailVerified : true,   //google already verified the email
+                twoFactorEnabled : false
+            });
+
+            const accessToken = generateAccessToken(
+                user.id,
+                user.role as 'user'|'admin',
+                user.tokenVersion
+            )
+
+            const refreshToken = createRefreshToken(
+                user.id,
+                user.tokenVersion
+            );
+            
+            const isProduction = process.env.NODE_ENV === 'production';
+            res.cookie('refreshToken' , refreshToken , {
+            httpOnly : true,
+            secure : isProduction,
+            sameSite : 'lax',
+            path : '/',
+            maxAge : 7 * 24 * 60 * 60 * 1000 // 7 days
+        })
+
+        return res.status(200).json({
+            message : 'Google Login successful',
+            accessToken : accessToken,
+            user : {
+                id : user._id,
+                email : user.email,
+                name : user.name,
+                role : user.role,
+                isEmailVerified : user.isEmailVerified,
+                twoFactorEnabled : user.twoFactorEnabled
+            }
+        })
+
+
+         }else{
+            if(!user.isEmailVerified){
+                user.isEmailVerified=true;
+                await user.save();
+            }
+         }
+        
+    } catch (error) {
+        console.log(error);
+          return res.status(500).json({
+            message : "Internal server error"
+        })
+    }
+}
