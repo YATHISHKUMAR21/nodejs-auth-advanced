@@ -506,3 +506,5 @@ export async function googleAuthCallbackHandler(req: Request , res: Response){
         })
     }
 }
+
+//NEXT TWO FACTOR AUTH

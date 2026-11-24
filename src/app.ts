@@ -3,7 +3,7 @@ import cookieParser from 'cookie-parser';
 
 import authRouter from './routes/auth.routes';
 import userRouter from './routes/user.routes';
-import adminRouter from './routes/admin.routes'
+import adminRouter from './routes/admin.routes';
 
 
 const app = express();
